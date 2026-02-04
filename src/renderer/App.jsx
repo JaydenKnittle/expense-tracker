@@ -1,14 +1,17 @@
 import { useEffect, useState } from 'react';
-import AddTransactionModal from './components/AddTransactionModal';
-import Dashboard from './components/Dashboard';
-import SavingsGoal from './components/SavingsGoal';
+import Sidebar from './components/Sidebar';
 import TitleBar from './components/TitleBar';
-import TransactionList from './components/TransactionList';
+import AddTransaction from './pages/AddTransaction';
+import Analytics from './pages/Analytics';
+import Dashboard from './pages/Dashboard';
+import Goals from './pages/Goals';
+import Transactions from './pages/Transactions';
 import './styles/App.css';
 
 export default function App() {
   const [transactions, setTransactions] = useState([]);
   const [totals, setTotals] = useState({ income: 0, expenses: 0, balance: 0 });
+  const [currentPage, setCurrentPage] = useState('dashboard');
   const [showAddModal, setShowAddModal] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -54,6 +57,21 @@ export default function App() {
     }
   };
 
+  const renderPage = () => {
+  switch (currentPage) {
+    case 'dashboard':
+      return <Dashboard totals={totals} transactions={transactions} onDelete={handleDeleteTransaction} />;
+    case 'analytics':
+      return <Analytics transactions={transactions} totals={totals} />;
+    case 'transactions':
+      return <Transactions transactions={transactions} onDelete={handleDeleteTransaction} />;
+    case 'goals':
+      return <Goals totals={totals} transactions={transactions} />;
+    default:
+      return <Dashboard totals={totals} transactions={transactions} onDelete={handleDeleteTransaction} />;
+  }
+};
+
   if (isLoading) {
     return (
       <div className="app">
@@ -71,52 +89,20 @@ export default function App() {
       <TitleBar />
       
       <div className="content">
-        <aside className="sidebar">
-          <div className="logo">
-            <span className="logo-icon">💰</span>
-            <h1>Expense Tracker</h1>
-          </div>
-
-          <nav className="nav">
-            <button className="nav-item active">
-              <span className="nav-icon">📊</span>
-              Dashboard
-            </button>
-            <button className="nav-item">
-              <span className="nav-icon">📝</span>
-              Transactions
-            </button>
-            <button className="nav-item">
-              <span className="nav-icon">🎯</span>
-              Goals
-            </button>
-            <button className="nav-item">
-              <span className="nav-icon">⚙️</span>
-              Settings
-            </button>
-          </nav>
-
-          <button 
-            className="add-transaction-btn"
-            onClick={() => setShowAddModal(true)}
-          >
-            <span>+</span> Add Transaction
-          </button>
-        </aside>
+        <Sidebar 
+          currentPage={currentPage}
+          onPageChange={setCurrentPage}
+          onAddTransaction={() => setShowAddModal(true)}
+        />
 
         <main className="main">
-          <Dashboard totals={totals} />
-          <SavingsGoal currentBalance={totals.balance} />
-          <TransactionList 
-            transactions={transactions}
-            onDelete={handleDeleteTransaction}
-          />
+          {renderPage()}
         </main>
       </div>
 
       {showAddModal && (
-        <AddTransactionModal
-          onClose={() => setShowAddModal(false)}
+        <AddTransaction
+          onCancel={() => setShowAddModal(false)}
           onAdd={handleAddTransaction}
         />
       )}

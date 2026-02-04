@@ -30,15 +30,24 @@ db.exec(`
   INSERT OR IGNORE INTO settings (id, savings_goal) VALUES (1, 1000000);
 `);
 
+// Add isRecurring column if it doesn't exist (migration)
+try {
+  db.exec(`ALTER TABLE transactions ADD COLUMN isRecurring INTEGER DEFAULT 0;`);
+  console.log('✅ Added isRecurring column');
+} catch (error) {
+  // Column already exists, ignore
+  console.log('✅ isRecurring column already exists');
+}
+
 console.log('✅ Database initialized');
 
 // Transaction functions
 const transactions = {
-  add: (type, amount, category, description, date) => {
+  add: (type, amount, category, description, date, isRecurring = false) => {
     const stmt = db.prepare(
-      'INSERT INTO transactions (type, amount, category, description, date) VALUES (?, ?, ?, ?, ?)'
+      'INSERT INTO transactions (type, amount, category, description, date, isRecurring) VALUES (?, ?, ?, ?, ?, ?)'
     );
-    return stmt.run(type, amount, category, description, date);
+    return stmt.run(type, amount, category, description, date, isRecurring ? 1 : 0);
   },
 
   getAll: () => {
@@ -88,3 +97,21 @@ const settings = {
     ).run(savingsGoal, goalDate);
   }
 };
+
+// Clear database function
+const clearDatabase = () => {
+  try {
+    db.exec(`
+      DELETE FROM transactions;
+      DELETE FROM sqlite_sequence WHERE name='transactions';
+      UPDATE settings SET savings_goal = 1000000, goal_date = NULL WHERE id = 1;
+    `);
+    console.log('✅ Database cleared!');
+    return true;
+  } catch (error) {
+    console.error('❌ Failed to clear database:', error);
+    return false;
+  }
+};
+
+module.exports = { transactions, settings, db, clearDatabase };

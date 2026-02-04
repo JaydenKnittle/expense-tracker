@@ -18,10 +18,9 @@ function createWindow() {
     backgroundColor: '#0f172a',
     titleBarStyle: 'hidden',
     frame: false,
-    show: false, // Don't show until ready
+    show: false,
   });
 
-  // Load from dev server in development, or production build
   if (isDev) {
     mainWindow.loadURL('http://localhost:3000');
     mainWindow.webContents.openDevTools();
@@ -29,7 +28,6 @@ function createWindow() {
     mainWindow.loadFile(path.join(__dirname, '../../dist/index.html'));
   }
 
-  // Show window when ready (prevents white flash)
   mainWindow.once('ready-to-show', () => {
     mainWindow.show();
   });
@@ -42,7 +40,8 @@ ipcMain.handle('add-transaction', async (event, data) => {
     data.amount,
     data.category,
     data.description,
-    data.date
+    data.date,
+    data.isRecurring || false
   );
 });
 

@@ -5,12 +5,13 @@ const CATEGORIES = {
   expense: ['Food', 'Transport', 'Rent', 'Utilities', 'Entertainment', 'Shopping', 'Health', 'Education', 'Business', 'Other']
 };
 
-export default function AddTransactionModal({ onClose, onAdd }) {
+export default function AddTransaction({ onAdd, onCancel }) {
   const [type, setType] = useState('expense');
   const [amount, setAmount] = useState('');
   const [category, setCategory] = useState('');
   const [description, setDescription] = useState('');
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+  const [isRecurring, setIsRecurring] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleSubmit = async (e) => {
@@ -30,9 +31,10 @@ export default function AddTransactionModal({ onClose, onAdd }) {
         category,
         description,
         date,
+        isRecurring,
       });
       
-      onClose();
+      onCancel();
     } catch (error) {
       alert('Failed to add transaction: ' + error.message);
       setIsSubmitting(false);
@@ -40,44 +42,38 @@ export default function AddTransactionModal({ onClose, onAdd }) {
   };
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <div className="modal-overlay" onClick={onCancel}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <h2 className="modal-title">Add Transaction</h2>
-          <button className="modal-close" onClick={onClose}>
-            ✕
-          </button>
+          <button className="modal-close" onClick={onCancel}>✕</button>
         </div>
 
         <form className="modal-form" onSubmit={handleSubmit}>
+          {/* Type Selector */}
           <div className="form-group">
-            <label className="form-label">Type *</label>
+            <label className="form-label">Type</label>
             <div className="type-selector">
               <button
                 type="button"
                 className={`type-option ${type === 'income' ? 'active income' : ''}`}
-                onClick={() => {
-                  setType('income');
-                  setCategory('');
-                }}
+                onClick={() => { setType('income'); setCategory(''); }}
               >
                 💵 Income
               </button>
               <button
                 type="button"
                 className={`type-option ${type === 'expense' ? 'active expense' : ''}`}
-                onClick={() => {
-                  setType('expense');
-                  setCategory('');
-                }}
+                onClick={() => { setType('expense'); setCategory(''); }}
               >
                 💸 Expense
               </button>
             </div>
           </div>
 
+          {/* Amount */}
           <div className="form-group">
-            <label className="form-label">Amount (N$) *</label>
+            <label className="form-label">Amount (N$)</label>
             <input
               type="number"
               step="0.01"
@@ -90,8 +86,9 @@ export default function AddTransactionModal({ onClose, onAdd }) {
             />
           </div>
 
+          {/* Category */}
           <div className="form-group">
-            <label className="form-label">Category *</label>
+            <label className="form-label">Category</label>
             <select
               className="form-select"
               value={category}
@@ -100,13 +97,29 @@ export default function AddTransactionModal({ onClose, onAdd }) {
             >
               <option value="">Select category...</option>
               {CATEGORIES[type].map((cat) => (
-                <option key={cat} value={cat}>
-                  {cat}
-                </option>
+                <option key={cat} value={cat}>{cat}</option>
               ))}
             </select>
           </div>
 
+          {/* Recurring Toggle */}
+          <div className="form-group">
+            <label className="form-label">Frequency</label>
+            <div 
+              className={`recurring-toggle ${isRecurring ? 'active' : ''}`}
+              onClick={() => setIsRecurring(!isRecurring)}
+            >
+              <div className="recurring-label">
+                <div className="recurring-checkbox"></div>
+                <span>Recurring (Monthly)</span>
+              </div>
+              <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                {isRecurring ? 'Every month' : 'One-time'}
+              </span>
+            </div>
+          </div>
+
+          {/* Description */}
           <div className="form-group">
             <label className="form-label">Description</label>
             <textarea
@@ -117,8 +130,9 @@ export default function AddTransactionModal({ onClose, onAdd }) {
             />
           </div>
 
+          {/* Date */}
           <div className="form-group">
-            <label className="form-label">Date *</label>
+            <label className="form-label">Date</label>
             <input
               type="date"
               className="form-input"
@@ -128,18 +142,19 @@ export default function AddTransactionModal({ onClose, onAdd }) {
             />
           </div>
 
+          {/* Actions */}
           <div className="form-actions">
             <button 
               type="button" 
-              className="btn btn-secondary"
-              onClick={onClose}
+              className="btn btn-secondary" 
+              onClick={onCancel} 
               disabled={isSubmitting}
             >
               Cancel
             </button>
             <button 
               type="submit" 
-              className="btn btn-primary"
+              className="btn btn-primary" 
               disabled={isSubmitting}
             >
               {isSubmitting ? 'Adding...' : 'Add Transaction'}
