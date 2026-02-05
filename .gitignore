@@ -134,3 +134,20 @@ dist
 .yarn/build-state.yml
 .yarn/install-state.gz
 .pnp.*
+
+# ========================================
+# Electron & Desktop App Build Outputs
+# ========================================
+
+# Electron-builder output
+release/
+out/
+
+# Webpack build output
+dist/
+
+# Platform-specific installers
+*.exe
+*.dmg
+*.AppImage
+# ... and more
