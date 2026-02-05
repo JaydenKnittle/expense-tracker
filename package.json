@@ -7,7 +7,7 @@
   "license": "MIT",
   "scripts": {
     "dev": "concurrently \"npm run dev:react\" \"npm run dev:electron\"",
-    "dev:react": "webpack serve --mode development",
+    "dev:react": "webpack --mode development --watch",
     "dev:electron": "wait-on http://localhost:3000 && cross-env NODE_ENV=development electron .",
     "build:react": "webpack --mode production",
     "build:win": "npm run build:react && electron-builder --win",
