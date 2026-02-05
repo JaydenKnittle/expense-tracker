@@ -11,8 +11,23 @@ import {
   Title,
   Tooltip
 } from 'chart.js';
-import { useMemo } from 'react';
-import { Bar, Line, Pie } from 'react-chartjs-2';
+import { useEffect, useMemo, useState } from 'react';
+import { Line, Pie } from 'react-chartjs-2';
+import CashflowTimeline from '../components/CashflowTimeline';
+import GoalRace from '../components/GoalRace';
+import HealthScore from '../components/HealthScore';
+import InteractiveSlider from '../components/InteractiveSlider';
+import SpendingByDayChart from '../components/SpendingByDayChart';
+import SpendingHeatmap from '../components/SpendingHeatmap';
+import {
+  calculateCashflowTimeline,
+  calculateFutureImpact,
+  calculateHealthScore,
+  generateInsights,
+  getGoalRaceData,
+  getSpendingByDayOfWeek,
+  getSpendingHeatmap
+} from '../utils/analyticsInsights';
 import {
   calculateAverageMonthlyIncome,
   calculateBurnRate,
@@ -20,9 +35,10 @@ import {
   formatCurrency,
   getMonthlyTrends,
   getSpendingByCategory,
-  predictGoalDate,
+  getTotalMonthlyRecurring,
   projectFutureBalance
 } from '../utils/calculations';
+import { calculateGoalProgress, getGoalTypeInfo } from '../utils/goalCalculations';
 
 ChartJS.register(
   CategoryScale,
@@ -38,17 +54,39 @@ ChartJS.register(
 );
 
 export default function Analytics({ transactions, totals }) {
+  const [goals, setGoals] = useState([]);
+  const [whatIfAdjustment, setWhatIfAdjustment] = useState(500);
+
+  useEffect(() => {
+    loadGoals();
+  }, []);
+
+  const loadGoals = async () => {
+    try {
+      const data = await window.electronAPI.getGoals();
+      setGoals(data);
+    } catch (error) {
+      console.error('Failed to load goals:', error);
+    }
+  };
+
   const trends = useMemo(() => getMonthlyTrends(transactions), [transactions]);
   const categoryData = useMemo(() => getSpendingByCategory(transactions), [transactions]);
   const projections = useMemo(() => projectFutureBalance(totals.balance, transactions, 24), [totals.balance, transactions]);
   const avgMonthlyIncome = useMemo(() => calculateAverageMonthlyIncome(transactions, 6), [transactions]);
   const spendingVelocity = useMemo(() => calculateSpendingVelocity(transactions), [transactions]);
   const burnRate = useMemo(() => calculateBurnRate(transactions), [transactions]);
-  const goalDate = useMemo(() => predictGoalDate(totals.balance, transactions, 1000000), [totals.balance, transactions]);
+  const monthlyRecurring = useMemo(() => getTotalMonthlyRecurring(transactions), [transactions]);
 
-  // Calculate if on track
-  const monthsToGoal = goalDate ? goalDate.months : null;
-  const onTrack = monthsToGoal && monthsToGoal <= 24;
+  const insights = useMemo(() => generateInsights(transactions, totals, goals), [transactions, totals, goals]);
+  const futureImpact = useMemo(() => calculateFutureImpact(transactions, totals, goals, whatIfAdjustment), [transactions, totals, goals, whatIfAdjustment]);
+  const healthScore = useMemo(() => calculateHealthScore(transactions, totals, goals), [transactions, totals, goals]);
+  const heatmapData = useMemo(() => getSpendingHeatmap(transactions), [transactions]);
+  const dayOfWeekData = useMemo(() => getSpendingByDayOfWeek(transactions), [transactions]);
+  const cashflowTimeline = useMemo(() => calculateCashflowTimeline(transactions, totals.balance), [transactions, totals.balance]);
+  const goalRaceData = useMemo(() => getGoalRaceData(goals, transactions, totals.balance), [goals, transactions, totals.balance]);
+
+  const activeGoals = goals.filter(g => !g.completed && !g.archived);
 
   // Monthly Trends Chart
   const trendsChartData = {
@@ -91,28 +129,21 @@ export default function Analytics({ transactions, totals }) {
       {
         data: categoryData.map(c => c.amount),
         backgroundColor: [
-          '#6366f1',
-          '#8b5cf6',
-          '#ec4899',
-          '#f43f5e',
-          '#f59e0b',
-          '#10b981',
-          '#06b6d4',
-          '#3b82f6',
-          '#14b8a6',
-          '#84cc16',
+          '#6366f1', '#8b5cf6', '#ec4899', '#f43f5e',
+          '#f59e0b', '#10b981', '#06b6d4', '#3b82f6',
+          '#14b8a6', '#84cc16',
         ],
         borderWidth: 0,
       },
     ],
   };
 
-  // Future Projections Chart (2 years)
+  // Future Projections Chart with What-If
   const projectionsChartData = {
-    labels: projections.map(p => `Month ${p.month}`),
+    labels: projections.map(p => `M${p.month}`),
     datasets: [
       {
-        label: 'Projected Balance',
+        label: 'Current Pace',
         data: projections.map(p => p.balance),
         borderColor: '#6366f1',
         backgroundColor: 'rgba(99, 102, 241, 0.1)',
@@ -121,27 +152,24 @@ export default function Analytics({ transactions, totals }) {
         borderWidth: 2,
       },
       {
-        label: 'Goal (N$1M)',
-        data: projections.map(() => 1000000),
+        label: `With +${formatCurrency(whatIfAdjustment)}/mo`,
+        data: projections.map(p => p.balance + (whatIfAdjustment * p.month)),
         borderColor: '#10b981',
+        backgroundColor: 'rgba(16, 185, 129, 0.05)',
+        fill: false,
+        tension: 0.4,
+        borderWidth: 3,
+        borderDash: [5, 5],
+      },
+      ...activeGoals.filter(g => g.type === 'balance').map((goal, idx) => ({
+        label: goal.title,
+        data: projections.map(() => goal.target_amount),
+        borderColor: ['#f59e0b', '#ec4899', '#14b8a6'][idx % 3],
         borderDash: [5, 5],
         borderWidth: 2,
         fill: false,
         pointRadius: 0,
-      },
-    ],
-  };
-
-  // Spending by Category Bar Chart
-  const categoryBarData = {
-    labels: categoryData.slice(0, 5).map(c => c.category),
-    datasets: [
-      {
-        label: 'Spending',
-        data: categoryData.slice(0, 5).map(c => c.amount),
-        backgroundColor: '#6366f1',
-        borderRadius: 8,
-      },
+      })),
     ],
   };
 
@@ -153,10 +181,9 @@ export default function Analytics({ transactions, totals }) {
         display: true,
         labels: {
           color: '#94a3b8',
-          font: { size: 12, family: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif' },
-          padding: 16,
+          font: { size: 11 },
+          padding: 12,
           usePointStyle: true,
-          pointStyle: 'circle',
         }
       },
       tooltip: {
@@ -166,13 +193,10 @@ export default function Analytics({ transactions, totals }) {
         borderColor: 'rgba(255, 255, 255, 0.1)',
         borderWidth: 1,
         padding: 12,
-        displayColors: true,
         callbacks: {
           label: function(context) {
             let label = context.dataset.label || '';
-            if (label) {
-              label += ': ';
-            }
+            if (label) label += ': ';
             if (context.parsed.y !== null) {
               label += formatCurrency(context.parsed.y);
             }
@@ -186,9 +210,7 @@ export default function Analytics({ transactions, totals }) {
         ticks: { 
           color: '#64748b', 
           font: { size: 11 },
-          callback: function(value) {
-            return 'N$' + (value / 1000) + 'k';
-          }
+          callback: (value) => 'N$' + (value / 1000) + 'k',
         },
         grid: { color: 'rgba(255, 255, 255, 0.05)' },
         border: { display: false }
@@ -212,7 +234,6 @@ export default function Analytics({ transactions, totals }) {
           font: { size: 11 },
           padding: 12,
           usePointStyle: true,
-          pointStyle: 'circle',
         }
       },
       tooltip: {
@@ -235,50 +256,187 @@ export default function Analytics({ transactions, totals }) {
 
   return (
     <div className="page-analytics">
-      <h2 className="page-title">Analytics & Insights</h2>
+      <h2 className="page-title">📊 Analytics & Insights</h2>
 
-      {/* Insights Cards */}
-      <div className="insights-grid">
-        <div className="insight-card">
-          <div className="insight-icon">📈</div>
-          <div className="insight-content">
-            <div className="insight-label">Avg Monthly Income</div>
-            <div className="insight-value positive">{formatCurrency(avgMonthlyIncome)}</div>
-            <div className="insight-sub">After expenses</div>
+      {/* Financial Health Score */}
+      <div className="analytics-section">
+        <h3 className="section-title">💯 Financial Health Score</h3>
+        <HealthScore healthData={healthScore} />
+      </div>
+
+      {/* Active Goals Overview */}
+      {activeGoals.length > 0 && (
+        <div className="analytics-section">
+          <h3 className="section-title">🎯 Active Goals</h3>
+          <div className="goals-mini-grid">
+            {activeGoals.map((goal) => {
+              const progress = calculateGoalProgress(goal, transactions, totals.balance);
+              const typeInfo = getGoalTypeInfo(goal.type);
+
+              return (
+                <div key={goal.id} className="goal-mini-card">
+                  <div className="goal-mini-header">
+                    <span className="goal-mini-icon">{typeInfo.icon}</span>
+                    <span className="goal-mini-title">{goal.title}</span>
+                  </div>
+                  <div className="goal-mini-progress">
+                    <div className="goal-mini-bar-bg">
+                      <div 
+                        className={`goal-mini-bar ${progress.onTrack ? 'on-track' : 'behind'}`}
+                        style={{ width: `${Math.min(progress.percentage, 100)}%` }}
+                      />
+                    </div>
+                    <span className="goal-mini-percentage">{progress.percentage.toFixed(0)}%</span>
+                  </div>
+                  <div className="goal-mini-amount">
+                    {formatCurrency(progress.current)} / {formatCurrency(progress.target)}
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
+      )}
 
-        <div className="insight-card">
-          <div className="insight-icon">⚡</div>
-          <div className="insight-content">
-            <div className="insight-label">Spending Velocity</div>
-            <div className="insight-value">{formatCurrency(spendingVelocity)}/day</div>
-            <div className="insight-sub">Daily average</div>
+      {/* Goal Race */}
+      {goalRaceData.length > 1 && (
+        <div className="analytics-section">
+          <h3 className="section-title">🏁 Goal Race</h3>
+          <GoalRace raceData={goalRaceData} />
+        </div>
+      )}
+
+      {/* Smart Insights */}
+      {insights.length > 0 && (
+        <div className="analytics-section">
+          <h3 className="section-title">💡 Smart Insights</h3>
+          <div className="insights-list">
+            {insights.map((insight, idx) => (
+              <div key={idx} className={`insight-item ${insight.severity}`}>
+                <div className="insight-icon">{insight.icon}</div>
+                <div className="insight-content">
+                  <div className="insight-message">{insight.message}</div>
+                  <div className="insight-detail">{insight.detail}</div>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
+      )}
 
-        <div className="insight-card">
-          <div className="insight-icon">🔥</div>
-          <div className="insight-content">
-            <div className="insight-label">Burn Rate</div>
-            <div className="insight-value negative">{formatCurrency(burnRate)}/month</div>
-            <div className="insight-sub">Monthly expenses</div>
-          </div>
-        </div>
+      {/* Interactive Future Impact Simulator */}
+      <div className="analytics-section">
+        <h3 className="section-title">🔮 Future Impact Simulator</h3>
+        <div className="what-if-container">
+          <InteractiveSlider
+            value={whatIfAdjustment}
+            onChange={setWhatIfAdjustment}
+            min={-2000}
+            max={5000}
+            step={100}
+            label="Adjust Monthly Savings"
+          />
 
-        <div className="insight-card">
-          <div className="insight-icon">🎯</div>
-          <div className="insight-content">
-            <div className="insight-label">Goal ETA</div>
-            <div className={`insight-value ${onTrack ? 'positive' : 'warning'}`}>
-              {monthsToGoal ? `${monthsToGoal} months` : 'N/A'}
+          <div className="what-if-results">
+            <div className="what-if-stat">
+              <div className="what-if-label">New Monthly Income</div>
+              <div className="what-if-value">{formatCurrency(futureImpact.newMonthlyIncome)}</div>
+              <div className={`what-if-change ${whatIfAdjustment >= 0 ? 'positive' : 'negative'}`}>
+                {whatIfAdjustment >= 0 ? '+' : ''}{formatCurrency(whatIfAdjustment)}/month
+              </div>
             </div>
-            <div className="insight-sub">
-              {onTrack ? '✓ On track' : '⚠️ Behind schedule'}
-            </div>
+
+            {futureImpact.impacts.map((impact, idx) => (
+              <div key={idx} className="what-if-stat">
+                <div className="what-if-label">{impact.goalTitle}</div>
+                {impact.type === 'balance' && (
+                  <>
+                    <div className="what-if-value">
+                      {impact.newMonths} months
+                    </div>
+                    <div className={`what-if-change ${impact.improvement ? 'positive' : 'negative'}`}>
+                      {impact.improvement ? '↓' : '↑'} {Math.abs(impact.monthsSaved)} months
+                    </div>
+                  </>
+                )}
+                {impact.type === 'monthly_savings' && (
+                  <>
+                    <div className="what-if-value">
+                      {impact.newPercentage.toFixed(1)}%
+                    </div>
+                    <div className={`what-if-change ${impact.improvement ? 'positive' : 'negative'}`}>
+                      {impact.improvement ? '+' : ''}{(impact.newPercentage - impact.currentPercentage).toFixed(1)}%
+                    </div>
+                  </>
+                )}
+              </div>
+            ))}
           </div>
         </div>
       </div>
+
+      {/* Cashflow Timeline */}
+      <div className="analytics-section">
+        <h3 className="section-title">💸 Cashflow Timeline (Next 30 Days)</h3>
+        <CashflowTimeline timeline={cashflowTimeline} />
+      </div>
+
+      {/* Spending Heatmap */}
+      <div className="analytics-section">
+        <h3 className="section-title">🗓️ Spending Heatmap (Last 12 Weeks)</h3>
+        <SpendingHeatmap heatmapData={heatmapData} />
+      </div>
+
+      {/* Key Metrics - UPDATED */}
+<div className="metrics-grid">
+  <div className="metric-card primary">
+    <div className="metric-icon-bg">
+      <div className="metric-icon">📈</div>
+    </div>
+    <div className="metric-content">
+      <div className="metric-label">Avg Monthly Income</div>
+      <div className="metric-value">{formatCurrency(avgMonthlyIncome)}</div>
+      <div className="metric-sub">After expenses</div>
+    </div>
+    <div className="metric-sparkle"></div>
+  </div>
+
+  <div className="metric-card secondary">
+    <div className="metric-icon-bg">
+      <div className="metric-icon">⚡</div>
+    </div>
+    <div className="metric-content">
+      <div className="metric-label">Spending Velocity</div>
+      <div className="metric-value">{formatCurrency(spendingVelocity)}<span className="metric-unit">/day</span></div>
+      <div className="metric-sub">Daily average</div>
+    </div>
+    <div className="metric-sparkle"></div>
+  </div>
+
+  <div className="metric-card danger">
+    <div className="metric-icon-bg">
+      <div className="metric-icon">🔥</div>
+    </div>
+    <div className="metric-content">
+      <div className="metric-label">Burn Rate</div>
+      <div className="metric-value">{formatCurrency(burnRate)}<span className="metric-unit">/mo</span></div>
+      <div className="metric-sub">Monthly expenses</div>
+    </div>
+    <div className="metric-sparkle"></div>
+  </div>
+
+  <div className="metric-card success">
+    <div className="metric-icon-bg">
+      <div className="metric-icon">💰</div>
+    </div>
+    <div className="metric-content">
+      <div className="metric-label">Net Monthly Income</div>
+      <div className="metric-value">{formatCurrency(monthlyRecurring)}<span className="metric-unit">/mo</span></div>
+      <div className="metric-sub">Recurring only</div>
+    </div>
+    <div className="metric-sparkle"></div>
+  </div>
+</div>
 
       {/* Charts Grid */}
       <div className="charts-grid">
@@ -297,16 +455,16 @@ export default function Analytics({ transactions, totals }) {
         </div>
 
         <div className="chart-card">
-          <h3 className="chart-title">Top 5 Categories</h3>
+          <h3 className="chart-title">Spending by Day of Week</h3>
           <div className="chart-container">
-            <Bar data={categoryBarData} options={chartOptions} />
+            <SpendingByDayChart dayData={dayOfWeekData} />
           </div>
         </div>
 
         <div className="chart-card ultra-wide">
-          <h3 className="chart-title">Balance Projection (Next 24 Months)</h3>
+          <h3 className="chart-title">Balance Projection with What-If Scenario</h3>
           <div className="chart-subtitle">
-            Based on your average monthly income of {formatCurrency(avgMonthlyIncome)}
+            Drag the slider above to see how changes affect your future balance
           </div>
           <div className="chart-container">
             <Line data={projectionsChartData} options={chartOptions} />

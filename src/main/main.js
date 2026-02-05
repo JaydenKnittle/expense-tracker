@@ -1,6 +1,6 @@
 const { app, BrowserWindow, ipcMain } = require('electron');
 const path = require('path');
-const { transactions, settings } = require('./database');
+const { transactions, settings, goals } = require('./database');
 
 const isDev = process.env.NODE_ENV === 'development';
 
@@ -33,7 +33,7 @@ function createWindow() {
   });
 }
 
-// IPC Handlers
+// Transaction IPC Handlers
 ipcMain.handle('add-transaction', async (event, data) => {
   return transactions.add(
     data.type,
@@ -61,6 +61,7 @@ ipcMain.handle('get-category-totals', async () => {
   return transactions.getCategoryTotals();
 });
 
+// Settings IPC Handlers
 ipcMain.handle('get-settings', async () => {
   return settings.get();
 });
@@ -69,6 +70,40 @@ ipcMain.handle('update-settings', async (event, data) => {
   return settings.update(data.savingsGoal, data.goalDate);
 });
 
+// Goals IPC Handlers
+ipcMain.handle('add-goal', async (event, data) => {
+  return goals.add(data.title, data.type, data.targetAmount, data.deadline);
+});
+
+ipcMain.handle('get-goals', async () => {
+  return goals.getAll();
+});
+
+ipcMain.handle('get-goal', async (event, id) => {
+  return goals.getById(id);
+});
+
+ipcMain.handle('update-goal', async (event, data) => {
+  return goals.update(data.id, data.title, data.type, data.targetAmount, data.deadline);
+});
+
+ipcMain.handle('delete-goal', async (event, id) => {
+  return goals.delete(id);
+});
+
+ipcMain.handle('archive-goal', async (event, id) => {
+  return goals.archive(id);
+});
+
+ipcMain.handle('mark-goal-complete', async (event, id) => {
+  return goals.markComplete(id);
+});
+
+ipcMain.handle('mark-goal-incomplete', async (event, id) => {
+  return goals.markIncomplete(id);
+});
+
+// Window controls
 ipcMain.handle('minimize-window', () => {
   BrowserWindow.getFocusedWindow()?.minimize();
 });

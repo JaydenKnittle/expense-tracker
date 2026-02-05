@@ -1,23 +1,30 @@
 const path = require('path');
 const HtmlWebpackPlugin = require('html-webpack-plugin');
-const webpack = require('webpack');
 
 module.exports = {
-  mode: 'development',
+  target: 'electron-renderer',
   entry: './src/renderer/index.jsx',
-  target: 'web',
-  devtool: 'source-map',
-  
-  // DON'T externalize anything - bundle it all
-  externals: {},
-  
+  output: {
+    path: path.resolve(__dirname, 'dist'),
+    filename: 'renderer.js',
+    clean: true,
+  },
+  resolve: {
+    extensions: ['.js', '.jsx'],
+    fallback: {
+      path: require.resolve('path-browserify'),
+    },
+  },
   module: {
     rules: [
       {
-        test: /\.(js|jsx)$/,
+        test: /\.jsx?$/,
         exclude: /node_modules/,
         use: {
           loader: 'babel-loader',
+          options: {
+            presets: ['@babel/preset-react'],
+          },
         },
       },
       {
@@ -26,48 +33,20 @@ module.exports = {
       },
     ],
   },
-  
-  resolve: {
-    extensions: ['.js', '.jsx'],
-    fallback: {
-      "path": require.resolve("path-browserify"),
-      "stream": require.resolve("stream-browserify"),
-      "buffer": require.resolve("buffer/"),
-      "util": require.resolve("util/"),
-      "events": require.resolve("events/"),
-      "fs": false,
-    }
-  },
-  
-  output: {
-    path: path.resolve(__dirname, 'dist'),
-    filename: 'renderer.js',
-    publicPath: '/',
-  },
-  
   plugins: [
-    new webpack.ProvidePlugin({
-      process: 'process/browser',
-      Buffer: ['buffer', 'Buffer'],
-    }),
-    new webpack.DefinePlugin({
-      'global': 'window',
-      'process.env.NODE_ENV': JSON.stringify('development'),
-    }),
     new HtmlWebpackPlugin({
       template: './src/renderer/index.html',
+      filename: 'index.html',
     }),
   ],
-  
   devServer: {
     static: {
       directory: path.join(__dirname, 'dist'),
     },
-    compress: true,
     port: 3000,
     hot: true,
-    headers: {
-      'Access-Control-Allow-Origin': '*',
-    },
+    historyApiFallback: true,
   },
+  mode: process.env.NODE_ENV === 'production' ? 'production' : 'development',
+  devtool: process.env.NODE_ENV === 'production' ? false : 'source-map',
 };
